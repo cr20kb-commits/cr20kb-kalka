@@ -1,0 +1,17 @@
+CR20KB Kalka — additional third-party notices
+
+This software is based in part on the work of the FreeType Team.
+Это программное обеспечение частично основано на работе команды FreeType.
+
+Pillow clarified that its FriBiDi shim is licensed under MIT-CMU and that
+FriBiDi is not included in its wheels. See:
+https://pillow.readthedocs.io/en/stable/releasenotes/13.0.0.html#clarified-fribidi-shim-license
+
+The application includes Microsoft Edge WebView2 Fixed Runtime and Microsoft
+Defender SmartScreen. SmartScreen is enabled by default and collects and sends
+end-user information to Microsoft as disclosed in Microsoft's Privacy
+Statement and Edge Privacy Whitepaper:
+https://aka.ms/privacy
+https://learn.microsoft.com/en-us/microsoft-edge/privacy-whitepaper#smartscreen
+The WebView2 runtime's third-party notices are available via the application's
+licenses menu and the runtime's own included credits mechanism.
