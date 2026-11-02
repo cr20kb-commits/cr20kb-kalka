@@ -1,6 +1,6 @@
 # CR20KB «Калька»
 
-**Версия 1.0.5 для Windows x64** · [Скачать Setup](https://github.com/cr20kb-commits/cr20kb-kalka/releases/download/v1.0.5/CR20KB-Kalka-Setup.exe) · [Скачать Portable](https://github.com/cr20kb-commits/cr20kb-kalka/releases/download/v1.0.5/CR20KB-Kalka-Portable.zip) · [Страница CR20KB](https://cr20kb.com/utilities/kalka/)
+**Версия 1.0.5 для Windows x64** · [Скачать Setup](https://github.com/cr20kb-commits/cr20kb-kalka/releases/download/v1.0.5/CR20KB-Kalka-Setup.exe) · [Скачать Portable](https://github.com/cr20kb-commits/cr20kb-kalka/releases/download/v1.0.5/CR20KB-Kalka-Portable.zip) · [Полезности CR20KB](https://cr20kb.com/utilities/)
 
 Калька — инструмент визуального сравнения редакций технических чертежей и других графических документов путём наложения изображений или страниц PDF. Приложение поддерживает PDF, JPG и PNG, несколько слоёв, прозрачность и цветовое выделение, масштабирование и перемещение, подписи, даты и комментарии, сохранение проекта и экспорт PNG. Интерфейс доступен на русском, английском и китайском. Документы обрабатываются локально.
 
