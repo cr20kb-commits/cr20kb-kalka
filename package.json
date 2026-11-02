@@ -1,0 +1,8 @@
+{
+  "name": "cr20kb-kalka-tests",
+  "private": true,
+  "version": "1.0.5",
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

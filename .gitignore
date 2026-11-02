@@ -1,0 +1,14 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+venv/
+node_modules/
+.env
+.env.*
+build/
+dist/
+*.exe
+*.dll
+*.zip
+*.kalka

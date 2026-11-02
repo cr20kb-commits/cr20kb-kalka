@@ -1,0 +1,7 @@
+# Preserve exact reviewed source, license, and manifest bytes on every platform.
+* -text
+*.cs whitespace=cr-at-eol
+kalka_server.py whitespace=cr-at-eol
+*.jpg -diff
+*.pdf -diff
+*.png -diff

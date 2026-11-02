@@ -1,0 +1,135 @@
+"""Build an unofficial pypdfium2 wheel against the pinned PDFium 8111 binaries.
+
+This is a local test build, not a release or an upstream-supported wheel.
+The source archives must be supplied locally and are checked before extraction.
+"""
+import argparse
+import hashlib
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tarfile
+import tempfile
+import zipfile
+from pathlib import Path, PurePosixPath
+
+
+SOURCES = {
+    'sdist': 'c5f009b3157f10e97dceb55963f5910eff92feb00587ba10a76f12b87ce1a4b6',
+    'pdfium': '3452d11031050ec65e57f180215b57b9e6d465e3fbedafa8a77ad90885c7d23e',
+    'zig': '3a0ed1e8799a2f8ce2a6e6290a9ff22e6906f8227865911fb7ddedc3cc14cb0c',
+}
+
+
+def sha(path):
+    h = hashlib.sha256()
+    with Path(path).open('rb') as f:
+        for block in iter(lambda: f.read(1024 * 1024), b''):
+            h.update(block)
+    return h.hexdigest()
+
+
+def safe_name(name):
+    p = PurePosixPath(name)
+    if p.is_absolute() or '..' in p.parts or '\\' in name or ':' in name:
+        raise ValueError('Unsafe archive member: ' + name)
+
+
+def run(cmd, cwd, env, log, check_diagnostics=False):
+    proc = subprocess.run(cmd, cwd=cwd, env=env, stdout=subprocess.PIPE,
+                          stderr=subprocess.STDOUT, text=True, encoding='utf-8', errors='replace')
+    log.write(proc.stdout)
+    if proc.returncode or (check_diagnostics and ('ERROR:' in proc.stdout or 'error:' in proc.stdout or
+                                                  'Pre-processor returned non-zero' in proc.stdout)):
+        raise RuntimeError('Build failed; see build.log')
+    return proc.stdout
+
+
+def main():
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument('--sdist', required=True)
+    p.add_argument('--pdfium', required=True)
+    p.add_argument('--zig', required=True)
+    p.add_argument('--output', required=True, help='New directory; never overwritten')
+    a = p.parse_args()
+    files = {name: Path(getattr(a, name)).resolve(strict=True) for name in SOURCES}
+    for name, path in files.items():
+        if sha(path) != SOURCES[name]:
+            raise ValueError('Pinned input hash mismatch: ' + name)
+    out = Path(a.output).resolve()
+    if out.exists():
+        raise FileExistsError(out)
+    out.mkdir(parents=True)
+    with (out/'build.log').open('x', encoding='utf-8') as log:
+        with tempfile.TemporaryDirectory(prefix='pdfium8111-', dir=out) as scratch:
+            work = Path(scratch)
+            with tarfile.open(files['sdist']) as t:
+                for member in t.getmembers():
+                    safe_name(member.name)
+                    if not (member.isfile() or member.isdir()):
+                        raise ValueError('Unexpected archive member: ' + member.name)
+                t.extractall(work, filter='data')
+            with zipfile.ZipFile(files['zig']) as z:
+                for member in z.infolist():
+                    safe_name(member.filename)
+                z.extractall(work/'zig')
+            source = work/'pypdfium2-5.14.0'
+            zig = work/'zig'/'zig-x86_64-windows-0.15.2'/'zig.exe'
+            shims = work/'standard-shims'
+            shims.mkdir()
+            (shims/'stddef.h').write_text('typedef __SIZE_TYPE__ size_t;\ntypedef __PTRDIFF_TYPE__ ptrdiff_t;\n', encoding='ascii')
+            (shims/'stdint.h').write_text('typedef signed char int8_t;\ntypedef unsigned char uint8_t;\ntypedef short int16_t;\ntypedef unsigned short uint16_t;\ntypedef int int32_t;\ntypedef unsigned int uint32_t;\ntypedef long long int64_t;\ntypedef unsigned long long uint64_t;\n', encoding='ascii')
+            (shims/'time.h').write_text('typedef long long time_t;\nstruct tm { int tm_sec; int tm_min; int tm_hour; int tm_mday; int tm_mon; int tm_year; int tm_wday; int tm_yday; int tm_isdst; };\n', encoding='ascii')
+            (source/'data/windows_x64').mkdir(parents=True, exist_ok=True)
+            archive = work/'pdfium-working.tgz'
+            shutil.copyfile(files['pdfium'], archive)
+            env = os.environ.copy()
+            env.update(PYTHONUTF8='1', PYTHONDONTWRITEBYTECODE='1', TEMP=str(work), TMP=str(work),
+                       ZIG_GLOBAL_CACHE_DIR=str(work/'zig-cache'), ZIG_LOCAL_CACHE_DIR=str(work/'zig-cache'),
+                       CPP=f'"{zig.as_posix()}" cc -E -target x86_64-windows-gnu -nostdinc -I "{shims.as_posix()}"',
+                       PDFIUM_PLATFORM='windows_x64:8111', USE_TARBALL_LICENSES='1')
+            env.pop('PYTHONPATH', None)
+            env.pop('PYTHONHOME', None)
+            stage = """from pathlib import Path
+import sys
+sys.path.insert(0, 'setupsrc')
+import update
+update.do_extract({'windows_x64':Path(sys.argv[1])}, 8111, ())
+from base import run_ctypesgen, DataDir, CTG_LIBPATTERN
+out=DataDir/'bindings'/'bindings.py'
+run_ctypesgen(out,DataDir/'bindings'/'headers_8111',ct_paths=(DataDir/'windows_x64'/CTG_LIBPATTERN,),windows_cross=True,no_srcinfo=True,version=8111)
+s=out.read_text(encoding='utf-8')
+assert s.startswith('R\"\"\"\\nAuto-generated by:')
+end=s.index('\"\"\"',4)+3
+s='\"\"\"Bindings generated from PDFium 8111 headers using pypdfium2 ctypesgen.\"\"\"'+s[end:]
+assert str(DataDir) not in s and DataDir.as_posix() not in s
+out.write_text(s,encoding='utf-8',newline='\\n')
+from base import write_json
+write_json(DataDir/'bindings'/'version.json',{'version':8111,'flags':[],'windows_cross':True})
+"""
+            diagnostics = run([sys.executable, '-c', stage, str(archive)], source, env, log, True)
+            # These two ctypesgen warnings concern FPDF_EXPORT, not a function signature;
+            # retain them in the log and reject all other warnings.
+            warnings = [x for x in diagnostics.splitlines() if x.startswith('WARNING:')]
+            if len(warnings) != 2 or not all(('__declspec' in x or "Macro 'FPDF_EXPORT'" in x) for x in warnings):
+                raise RuntimeError('Unexpected generator warning; see build.log')
+            run([sys.executable, 'setup.py', 'bdist_wheel', '--dist-dir', str(out)], source, env, log)
+    wheel = out/'pypdfium2-5.14.0-py3-none-win_amd64.whl'
+    with zipfile.ZipFile(wheel) as z:
+        version = json.loads(z.read('pypdfium2_raw/version.json'))
+        if version['build'] != 8111 or version['flags']:
+            raise ValueError('Unexpected PDFium version or flags')
+        license_paths = [n for n in z.namelist() if '/BUILD_LICENSES/' in n and not n.endswith('/')]
+        if len(license_paths) != 19:
+            raise ValueError('Unexpected PDFium license set')
+    info = {'type': 'unofficial local test build', 'pdfium': version, 'source_sha256': SOURCES,
+            'wheel_sha256': sha(wheel), 'generator_warnings': warnings}
+    (out/'build-info.json').write_text(json.dumps(info, ensure_ascii=False, indent=2)+'\n', encoding='utf-8')
+    print('TEST WHEEL', wheel, 'SHA256', info['wheel_sha256'])
+    print('Two known ctypesgen warnings retained in build.log; ABI and application tests remain required.')
+
+
+if __name__ == '__main__':
+    main()
