@@ -1,0 +1,5 @@
+// Development-only static server; never exposed outside this machine.
+import http from 'node:http';import {readFile} from 'node:fs/promises';import {resolve,extname,sep} from 'node:path';import {fileURLToPath} from 'node:url';
+const root=fileURLToPath(new URL('./dist/',import.meta.url)),port=Number(process.env.KALKA_PORT||4173);
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.mjs':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.json':'application/json','.webmanifest':'application/manifest+json','.wasm':'application/wasm','.png':'image/png'};
+http.createServer(async(req,res)=>{try{let u=new URL(req.url,'http://localhost');if(!u.pathname.startsWith('/kalka-web/')){res.writeHead(404).end();return}let name=decodeURIComponent(u.pathname.slice('/kalka-web/'.length))||'index.html',file=resolve(root,name);if(!file.startsWith(root)){res.writeHead(403).end();return}let data=await readFile(file);res.writeHead(200,{'Content-Type':types[extname(file)]||'application/octet-stream'});res.end(data)}catch{res.writeHead(404).end()}}).listen(port,'127.0.0.1',()=>console.log(`http://127.0.0.1:${port}/kalka-web/`));
